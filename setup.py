@@ -33,7 +33,7 @@ setup(
     author_email='achachiez@gmail.com',
     license='Apache Software License',
 
-    install_requires=[],
+    install_requires=['phonenumbers','pympesa'],
     packages=find_packages(exclude=['tests', 'tests.*']),
     include_package_data=True,
     cmdclass=cmdclass,
