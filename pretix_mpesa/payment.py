@@ -1,8 +1,8 @@
 import json
 import logging
 import urllib.parse
-from collections import OrderedDict
 import phonenumbers
+import math
 
 from pympesa import Pympesa
 from django import forms
@@ -11,9 +11,11 @@ from django.core import signing
 from django.template.loader import get_template
 from django.utils.translation import ugettext as __, ugettext_lazy as _
 from django.utils.functional import cached_property
+from collections import OrderedDict
+from django.http import HttpRequest
 
 from pretix.base.decimal import round_decimal
-from pretix.base.models import Order, Quota, RequiredAction
+from pretix.base.models import Order, Quota, RequiredAction,OrderPayment, OrderRefund
 from pretix.base.payment import BasePaymentProvider, PaymentException
 from pretix.base.services.mail import SendMailException
 from pretix.base.services.orders import mark_order_paid, mark_order_refunded
@@ -33,7 +35,9 @@ class Mpesa(BasePaymentProvider):
     verbose_name = _('Mpesa')
     payment_form_fields = OrderedDict([
     ])
-
+    @property
+    def abort_pending_allowed(self):
+        return False
     @cached_property
     def cart_session(self):
         return cart_session(self.request)
@@ -77,6 +81,12 @@ class Mpesa(BasePaymentProvider):
                      required=True,
                      help_text=_('The password for encrypting the request')
                  )),
+                 ('stk_callback_url',
+                 forms.CharField(
+                     label=_('Mpesa STK Callback'),
+                     required=True,
+                     help_text=_('This is the callback url for mpesa stk')
+                 )),
                 ('mpesa_phone_number_field_required',
                  forms.BooleanField(
                      label=_('Will the mpesa phone number be required to place an order'),
@@ -117,6 +127,7 @@ class Mpesa(BasePaymentProvider):
             return False
         else:
             if phonenumbers.is_valid_number(parsed_num):
+                request.session['mpesa_phone_number'] = '254' + str(parsed_num.national_number)
                 return True
             else:
                 messages.error(request, _('The Mpesa number is not a valid phone number'))
@@ -128,7 +139,7 @@ class Mpesa(BasePaymentProvider):
     def order_can_retry(self, order):
         return self._is_still_available(order=order)
 
-    def payment_perform(self, request, order) -> str:
+    def execute_payment(self, request: HttpRequest, payment: OrderPayment):
         """
         Will be called if the user submitted his order successfully to initiate the
         payment process.
@@ -144,14 +155,19 @@ class Mpesa(BasePaymentProvider):
         kwargs = {}
         if request.resolver_match and 'cart_namespace' in request.resolver_match.kwargs:
             kwargs['cart_namespace'] = request.resolver_match.kwargs['cart_namespace']
+        parsed_num = request.session.get('mpesa_phone_number', '')
+        logger.debug(parsed_num)
         mode = self.settings.get('endpoint')
         consumer_key = self.settings.get('safaricom_consumer_key')
         consumer_secret = self.settings.get('safaricom_consumer_secret')
         business_short_code = self.settings.get('mpesa_shortcode')
         password = self.settings.get('encryption_password')
-        callback_url = ''.join(build_absolute_uri(request.event, 'plugins:pretix_mpesa:callback', kwargs=kwargs)),
+        amount = math.ceil(payment.amount)
+        callback_url = self.settings.get('stk_callback_url')
+        logger.debug(amount)
+        logger.debug(callback_url)
         send_stk.apply_async(kwargs={'consumer_key': consumer_key, 'consumer_secret': consumer_secret,
                                      'business_short_code': business_short_code,
-                                     'password': password, 'amount': 10, 'phone': '254700247286', 'order_number': 'Test Order',
+                                     'password': password, 'amount': str(amount), 'phone': parsed_num, 'order_number': str(payment.id),
                                      'callback_url': callback_url, 'mode': mode})
         return None
