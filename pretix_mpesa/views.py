@@ -59,10 +59,11 @@ def stk_callback(request, *args, **kwargs):
             try:
                 payment = OrderPayment.objects.get(id=online_checkout.account_reference)
                 logger.info('Payment Found')
-                try:
-                    payment.confirm()
-                except Quota.QuotaExceededException:
-                    pass
+                if len(meta_data) > 0:
+                    try:
+                        payment.confirm()
+                    except Quota.QuotaExceededException:
+                        pass
             except OrderPayment.DoesNotExist:
                 logger.info('Payment Not found')
                 pass

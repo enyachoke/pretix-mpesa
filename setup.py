@@ -25,7 +25,7 @@ cmdclass = {
 
 setup(
     name='pretix-mpesa',
-    version='1.0.1',
+    version='1.0.2',
     description='Adds safaricom mpesa payments to pretix',
     long_description=long_description,
     url='https://github.com/enyachoke/pretix-mpesa',
