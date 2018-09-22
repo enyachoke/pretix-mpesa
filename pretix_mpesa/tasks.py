@@ -30,7 +30,7 @@ def send_stk(consumer_key, consumer_secret, business_short_code, password, amoun
         PhoneNumber=phone,
         CallBackURL=callback_url,
         AccountReference=order_number,
-        TransactionDesc=order_number
+        TransactionDesc='payment for order'
     )
     json_response = response.json()
     checkout_id = json_response.get('CheckoutRequestID')
